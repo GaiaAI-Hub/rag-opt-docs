@@ -1,0 +1,84 @@
+---
+title: "Core Architecture"
+description: "Understanding RAGOpt's architecture and optimization workflow"
+---
+
+<img
+  src="/images/RAGOpt.svg"
+  alt="RAGOpt Workflow Architecture"
+  width={500}
+  className="rounded-lg mx-auto"
+/>
+
+## Overview
+
+RAGOpt has three core components working together to optimize your RAG pipeline:
+
+**RAG Pipeline**: Handles data loading, parsing, chunking, indexing, and retrieval. Supports multiple providers for embeddings, LLMs, and vector stores.
+
+**Metric Evaluator**: Measures pipeline performance across quality, speed, cost, and safety dimensions. Acts as the objective function for optimization.
+
+**Bayesian Optimizer**: The brain of RAGOpt. Intelligently searches the configuration space by:
+
+- Loading your search space definition (which parameters to tune)
+- Sampling configurations using Sobol sequences or other strategies
+- Encoding parameters as PyTorch tensors for numerical optimization
+- Using acquisition functions to select promising configurations
+- Iteratively converging on optimal settings
+
+## How It Works
+
+### 1. Setup & Storage
+
+Generate evaluation questions from your data, then store them in dual systems:
+
+- **Vector Store**: Semantic similarity search
+- **Lexical Store**: Keyword-based retrieval
+
+### 2. Define Your Pipeline
+
+Configure your RAG system via YAML. Use the default LangChain implementation or build custom agentic pipelines.
+
+<Card title="RAG Configuration" icon="gear" href="/rag/overview">
+  Learn how to configure your RAG pipeline
+</Card>
+
+### 3. Bayesian Optimization
+
+**Why Bayesian Optimization?**  
+RAG evaluation is expensive. Unlike grid or random search, Bayesian Optimization builds a probabilistic model to intelligently select which configurations to test next, finding optimal settings with far fewer evaluations.
+
+**Powered by BoTorch**: PyTorch-based optimization with flexible sampling strategies (Sobol, quasi-Monte Carlo, random).
+
+<Card
+  title="Optimization Process"
+  icon="chart-line"
+  href="/optimization/overview"
+>
+  Deep dive into the optimization workflow
+</Card>
+
+### 4. Comprehensive Metrics
+
+Each iteration evaluates your pipeline across multiple dimensions:
+
+- **Quality**: Context precision/recall, relevancy, faithfulness, correctness (from RAGEval paper & RAGAS)
+- **Performance**: Latency and cost per query
+- **Safety**: Toxicity and bias detection
+- **Ranking**: MRR and NDCG
+
+**Custom metrics**: Add your own evaluation criteria.
+
+<Card title="Metrics System" icon="chart-bar" href="/metrics/overview">
+  Explore metrics and create custom evaluations
+</Card>
+
+### 5. Get Your Optimized Config
+
+The output is a **YAML file** with the best hyperparameters for your data and use case. Weight metrics based on your priorities—emphasize latency for real-time apps or safety for production.
+
+**Next Steps:**
+
+- [Custom RAG Configuration →](rag/overview)
+- [Custom Optimization Workflow →](optimization/overview)
+- [Evaluation and Metrics →](metrics/overview)

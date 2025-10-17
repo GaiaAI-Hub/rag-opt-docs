@@ -1,0 +1,128 @@
+---
+title: "3- RAG Manager"
+sidebarTitle: "3- RAG Manager"
+---
+
+The `RAGPipelineManager` is the heart of the optimization process. It orchestrates component loading, caching, and configuration sampling to efficiently evaluate thousands of RAG configurations.
+
+## Overview
+
+The manager handles:
+
+- **Component Loading**: Initialize LLMs, embeddings, vector stores, and rerankers
+- **Caching**: Reuse components across configurations to save time and cost
+- **Configuration Sampling**: Generate RAG configs from the search space
+- **Encoding/Decoding**: Convert between RAGConfig objects and optimization tensors
+- **Parallel Processing**: Batch evaluation with thread pools
+
+**Important**: You typically don't need to interact with the RAG Manager directly. The `Optimizer` class handles it automatically.
+
+## How It Works
+
+The manager operates in several key phases:
+
+### 1. Component Initialization
+
+When created, the manager:
+
+```python
+from rag_opt._manager import RAGPipelineManager
+from rag_opt.search_space import RAGSearchSpace
+
+search_space = RAGSearchSpace.from_yaml("./config.yaml")
+
+manager = RAGPipelineManager(
+    search_space=search_space,
+    eager_load=False,  # Load components on-demand
+    max_workers=5      # Parallel workers
+)
+```
+
+### 2. Lazy Loading & Caching
+
+Components are loaded once and cached:
+
+```
+First Request: LLM(gpt-3.5) → Initialize → Cache
+Second Request: LLM(gpt-3.5) → Return from Cache ✓
+```
+
+This dramatically reduces:
+
+- API initialization overhead
+- Memory usage
+- Evaluation time
+
+### 3. Configuration Sampling
+
+The manager samples configurations from the search space:
+
+```python
+# Sample RAG configurations
+configs = manager._search_space.sample(
+    n_samples=20,
+    sampler_type=SamplerType.SOBOL
+)
+
+# Each config contains:
+# - chunk_size, chunk_overlap, max_tokens
+# - search_type, k
+# - LLM, embeddings, vector store selections
+# - temperature, reranker settings
+```
+
+### 4. Encoding for Optimization
+
+Converts RAGConfig ↔ Tensor for Bayesian Optimization:
+
+```python
+# Config → Tensor (for optimizer)
+tensor = manager.encode_rag_config_to_tensor(config)
+
+# Tensor → Config (decode optimizer output)
+config = manager.decode_sample_to_rag_config(tensor)
+```
+
+This allows the optimizer to work in continuous space while evaluating discrete configurations.
+
+### 5. RAG Instance Creation
+
+Creates RAGWorkflow instances with cached components:
+
+```python
+rag = manager.create_rag_instance(
+    config=rag_config,
+    documents=train_docs,
+    initialize=True
+)
+
+# rag now contains:
+# - Cached LLM
+# - Cached embeddings
+# - Fresh vector store (per config)
+# - Cached reranker (if enabled)
+```
+
+## Integration with Optimizer
+
+The optimizer uses the manager internally:
+
+```python
+from rag_opt import Optimizer
+
+optimizer = Optimizer(
+    train_dataset=dataset,
+    config_path="./config.yaml"
+)
+
+my_manager = RAGPipelineManager(
+    search_space=search_space,
+    eager_load=False,  # Load components on-demand
+    max_workers=5      # Parallel workers
+)
+
+optimizer.rag_pipeline_manager = my_manager
+
+# Manager is created automatically
+# optimizer.rag_pipeline_manager is ready to use
+```

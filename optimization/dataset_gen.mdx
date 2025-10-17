@@ -1,0 +1,143 @@
+---
+title: "Dataset Generation"
+sidebarTitle: "1- Dataset Generation"
+---
+
+Dataset generation creates synthetic question-answer pairs from your documents to serve as ground truth during optimization. This eliminates the need for manual labeling while providing diverse test cases.
+
+## Overview
+
+The `DatasetGenerator` uses an LLM to automatically create questions of varying difficulty levels (easy, medium, hard) from your source documents.
+
+## Basic Usage
+
+```python
+from rag_opt.rag import DatasetGenerator
+from rag_opt import init_chat_model
+
+# Initialize LLM for generation
+llm = init_chat_model(
+    model="gpt-3.5-turbo",
+    model_provider="openai",
+    api_key="sk-***"
+)
+
+# Create generator with your documents
+generator = DatasetGenerator(
+    llm=llm,
+    dataset_path="./data"  # Path to your documents
+)
+
+# Generate dataset
+dataset = generator.generate(
+    n=50,  # Number of QA pairs
+    batch_size=10
+)
+
+# Save for later use
+dataset.to_json("./rag_dataset.json")
+```
+
+## Custom Document Parsing
+
+If you need custom document loading:
+
+```python
+from rag_opt.rag import Parser
+from langchain.schema import Document
+
+# Use custom parser
+parser = Parser(path="./data")
+docs = parser.load_docs()
+
+# Or provide documents directly
+documents = [
+    Document(page_content="Your text here..."),
+    Document(page_content="More content...")
+]
+
+generator = DatasetGenerator(
+    llm=llm,
+    parser=parser  # or pass documents to generate()
+)
+
+dataset = generator.generate(
+    n=30,
+    source_docs=documents
+)
+```
+
+## Difficulty Distribution
+
+Questions are automatically distributed across difficulty levels:
+
+- **30% Easy**: Basic recall questions (e.g., "What is X?")
+- **50% Medium**: Analytical questions requiring synthesis
+- **20% Hard**: Complex reasoning and inference questions
+
+This distribution ensures comprehensive evaluation across different query types.
+
+## Custom Prompts
+
+Customize the generation prompt:
+
+```python
+custom_prompt = """
+Generate question-answer pairs from these contexts:
+{contexts}
+
+Difficulty: {difficulty_instruction}
+
+Output as JSON array: [{"question": "...", "answer": "..."}]
+"""
+
+generator = DatasetGenerator(
+    llm=llm,
+    dataset_path="./data",
+    custom_prompt=custom_prompt
+)
+```
+
+## Async Generation
+
+For faster generation with large datasets:
+
+```python
+import asyncio
+
+dataset = await generator.agenerate(
+    n=100,
+    batch_size=20
+)
+```
+
+## Dataset Structure
+
+Generated datasets follow this structure:
+
+```python
+{
+  "items": [
+    {
+      "question": "What is the capital of France?",
+      "answer": "Paris",
+      "contexts": ["France is a country...", "Paris is located..."],
+    },
+    ...
+  ]
+}
+```
+
+## Loading Existing Datasets
+
+```python
+from rag_opt.dataset import TrainDataset
+
+# Load from JSON
+dataset = TrainDataset.from_json("./rag_dataset.json")
+
+# Access items
+for item in dataset.items:
+    print(f"Q: {item.question}")
+    print(f"A: {item.answer}")
+```

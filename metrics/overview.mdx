@@ -1,0 +1,139 @@
+---
+title: "Overview"
+description: "Evaluate your RAG pipeline with comprehensive metrics"
+---
+
+RAGOpt provides metrics to evaluate retrieval quality, generation performance, and operational costs in your RAG pipeline.
+
+## Metric Categories
+
+<CardGroup cols={3}>
+  <Card title="Retrieval Metrics" icon="magnifying-glass">
+    Document retrieval quality, relevance, and ranking
+  </Card>
+  <Card title="Generation Metrics" icon="wand-magic-sparkles">
+    Response quality, safety, and alignment
+  </Card>
+  <Card title="Full Pipeline Metrics" icon="gauge-high">
+    Cost and latency across the entire pipeline
+  </Card>
+</CardGroup>
+
+## Quick Start
+
+```python
+from rag_opt.eval import ContextPrecision, SafetyMetric
+from rag_opt.evaluator import RAGEvaluator
+from rag_opt.llm import RAGLLM
+
+# Initialize
+llm = RAGLLM(model="gpt-4")
+evaluator = RAGEvaluator(metrics=[
+    ContextPrecision(llm=llm),
+    SafetyMetric(llm=llm)
+])
+
+# Evaluate
+results = evaluator.evaluate(dataset)
+
+# View results
+for result in results:
+    print(f"{result.name}: {result.value:.3f}")
+```
+
+## How It Works
+
+Metrics return a `MetricResult` with:
+
+- **name**: Metric identifier
+- **value**: Aggregated score (0-1 scale)
+- **category**: RETRIEVAL, GENERATION, or FULL
+- **metadata**: Individual scores and details
+- **error**: Error message if failed
+
+### LLM-Based vs Non-LLM Metrics
+
+**LLM-Based** (SafetyMetric, AlignmentMetric, ContextPrecision)
+
+- Use an LLM judge for quality assessment
+- Require `llm` parameter at initialization
+- Batch process for efficiency
+
+**Non-LLM** (CostMetric, LatencyMetric, MRR, NDCG)
+
+- Direct calculation without LLM calls
+- Faster and deterministic
+
+## Custom Metrics
+
+```python
+from rag_opt.eval.metrics.base import BaseMetric, MetricCategory
+
+class MyCustomMetric(BaseMetric):
+    name: str = "my_metric"
+    category: MetricCategory = MetricCategory.RETRIEVAL
+    is_llm_based: bool = True
+
+    _prompt_template: str = """
+    Evaluate this context:
+    Context: {context}
+    Question: {question}
+
+    Rate from 0-100.
+    """
+
+    def __init__(self, llm, *args, **kwargs):
+        super().__init__(llm, *args, **kwargs)
+
+    def _evaluate(self, dataset, **kwargs) -> list[float]:
+        prompts = [
+            self._prompt_template.format(
+                context=item.contexts[0],
+                question=item.question
+            )
+            for item in dataset.items
+        ]
+
+        responses = self.llm.batch(prompts)
+
+        return [
+            float(r.content) / 100 if r.content.isdigit() else 0.0
+            for r in responses
+        ]
+```
+
+## Advanced Usage
+
+### Custom Prompts
+
+```python
+metric = SafetyMetric(
+    llm=llm,
+    prompt="Rate safety (0-100):\nContext: {contexts}\nQuestion: {question}\nAnswer: {answer}"
+)
+```
+
+### Selective Evaluation
+
+```python
+# Retrieval only
+retrieval_evaluator = RAGEvaluator(
+    metrics=[ContextPrecision(llm), MRR(), NDCG()]
+)
+
+# Generation only
+generation_evaluator = RAGEvaluator(
+    metrics=[SafetyMetric(llm), AlignmentMetric(llm)]
+)
+```
+
+### Analyzing Results
+
+```python
+for result in results:
+    print(f"\n{result.name}: {result.value:.3f} ({result.category.value})")
+
+    if result.metadata and "scores" in result.metadata:
+        scores = result.metadata["scores"]
+        print(f"Range: {min(scores):.3f} - {max(scores):.3f}")
+```

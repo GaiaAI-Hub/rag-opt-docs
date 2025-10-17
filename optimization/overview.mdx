@@ -1,0 +1,41 @@
+---
+title: "Overview"
+sidebarTitle: ""
+---
+
+RAGOpt provides an end-to-end framework for optimizing RAG (Retrieval-Augmented Generation) pipelines using Multi-Objective Bayesian Optimization. The framework automatically tunes hyperparameters to find Pareto-optimal configurations that balance multiple objectives like cost, latency, and quality metrics.
+
+## Framework Architecture
+
+![RAGOpt Framework](/images/RAGOpt.svg)
+
+The optimization workflow consists of five key components working together:
+
+1. **Dataset Generation** - Create synthetic question-answer pairs from your documents
+2. **Search Space** - Define the hyperparameter space to explore
+3. **BO Input Encoder** - Encode the RAG hyperparameter from and to pytorch tensors
+4. **Sampler** - Sampling choices from search space using SOBOL sampler by default
+5. **RAG Manager** - Orchestrate component loading and configuration sampling
+6. **Evaluation** - Measure performance across multiple metrics
+7. **Optimization** - Find optimal configurations using Bayesian Optimization
+
+## Quick Start
+
+Here's a minimal example to get started:
+
+```python
+from rag_opt import Optimizer
+from rag_opt.dataset import TrainDataset
+
+# Load your dataset
+dataset = TrainDataset.from_json("./rag_dataset.json")
+
+# Initialize optimizer with configuration
+optimizer = Optimizer(
+    train_dataset=dataset,
+    config_path="./rag_config.yaml"
+)
+
+# Run optimization
+best_configs = optimizer.optimize(n_trials=50)
+```

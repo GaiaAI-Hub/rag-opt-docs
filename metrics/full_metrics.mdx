@@ -1,0 +1,150 @@
+---
+title: "1. Full Metrics"
+description: ""
+# icon: "asterisk"
+---
+
+Full pipeline metrics evaluate operational aspects of your RAG system—cost and performance across the entire workflow.
+
+<Note>
+  **Note:** These metrics are non-LLM based and calculate directly from measured
+  values.
+</Note>
+
+## Quick Reference
+
+| Metric            | Measures                | Best For          | Negate      |
+| ----------------- | ----------------------- | ----------------- | ----------- |
+| **CostMetric**    | Total $ per query       | Budget monitoring | ✅ Minimize |
+| **LatencyMetric** | Total seconds per query | UX optimization   | ✅ Minimize |
+
+---
+
+## CostMetric
+
+**Tracks total cost per query across all RAG components.**
+
+```python
+from rag_opt.eval import CostMetric
+from rag_opt.evaluator import RAGEvaluator
+
+cost_metric = CostMetric()
+evaluator = RAGEvaluator(metrics=[cost_metric])
+results = evaluator.evaluate(dataset)
+
+# Mean cost
+print(f"Average: ${results[0].value:.4f}")
+
+# Per-query costs
+costs = results[0].metadata["scores"]
+print(f"Total: ${sum(costs):.4f}")
+print(f"Range: ${min(costs):.4f} - ${max(costs):.4f}")
+```
+
+**Cost breakdown per query:**
+
+- `item.cost.embedding` - Embedding API cost
+- `item.cost.vectorstore` - Vector search cost
+- `item.cost.reranker` - Reranking cost
+- `item.cost.llm` - LLM generation cost
+- `item.cost.total` - Sum of all costs
+
+**Default worst value:** $0.20 per query
+
+---
+
+## LatencyMetric
+
+**Measures total time from query to response.**
+
+```python
+from rag_opt.eval import LatencyMetric
+
+latency_metric = LatencyMetric()
+evaluator = RAGEvaluator(metrics=[latency_metric])
+results = evaluator.evaluate(dataset)
+
+# Mean latency
+print(f"Average: {results[0].value:.2f}s")
+
+# Percentiles
+latencies = sorted(results[0].metadata["scores"])
+p95 = latencies[int(len(latencies) * 0.95)]
+p99 = latencies[int(len(latencies) * 0.99)]
+print(f"P95: {p95:.2f}s | P99: {p99:.2f}s")
+```
+
+**Latency breakdown per query:**
+
+- `item.latency.embedding` - Embedding time
+- `item.latency.retrieval` - Vector search time
+- `item.latency.reranking` - Reranking time
+- `item.latency.generation` - LLM generation time
+- `item.latency.total` - Sum of all times
+
+**Default worst value:** 7.0 seconds per query
+
+---
+
+## Configuration Comparison
+
+```python
+def compare_configs(datasets: dict):
+    evaluator = RAGEvaluator(metrics=[CostMetric(), LatencyMetric()])
+
+    print(f"{'Config':<25} {'Cost':<12} {'Latency'}")
+    print("-" * 50)
+
+    for name, dataset in datasets.items():
+        results = evaluator.evaluate(dataset)
+        cost = results[0].value
+        latency = results[1].value
+        print(f"{name:<25} ${cost:<11.4f} {latency:.2f}s")
+
+# Usage
+compare_configs({
+    "gpt-4-with-reranker": dataset_a,
+    "gpt-3.5-no-reranker": dataset_b,
+    "claude-with-reranker": dataset_c
+})
+```
+
+---
+
+## Custom Worst Values
+
+Override defaults based on your constraints:
+
+```python
+class CustomCostMetric(CostMetric):
+    @property
+    def worst_value(self):
+        return 0.5  # $0.50 worst case
+
+class CustomLatencyMetric(LatencyMetric):
+    @property
+    def worst_value(self):
+        return 3.0  # 3s worst case for real-time app
+```
+
+---
+
+## Optimization Integration
+
+These metrics work with multi-objective optimization:
+
+```python
+from rag_opt.optimization import RAGOptimizer
+
+optimizer = RAGOptimizer(
+    metrics=[
+        CostMetric(),              # Minimize
+        LatencyMetric(),           # Minimize
+        ContextPrecision(llm),     # Maximize
+        SafetyMetric(llm)          # Maximize
+    ],
+    optimization_goal="multi_objective"
+)
+
+best_config = optimizer.optimize(dataset)
+```

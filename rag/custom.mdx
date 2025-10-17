@@ -1,0 +1,362 @@
+---
+title: "RAG Workflow"
+description: "Build and customize your own RAG pipelines with RAGOpt"
+---
+
+<Note>
+  RAGOpt uses LangChain's LLMChain by default. Agentic RAG requires explicit
+  configuration.
+</Note>
+
+## Overview
+
+RAGOpt's `RAGWorkflow` class lets you build custom RAG pipelines with modular components:
+
+1. **Parser** - Load and parse documents
+2. **Chunker** - Split documents into chunks
+3. **Indexer** - Store embeddings in vector database
+4. **Retriever** - Retrieve relevant documents
+5. **Reranker** (Optional) - Rerank retrieved documents
+6. **LLM** - Generate responses
+
+---
+
+## Complete Example
+
+```python
+from rag_opt import (
+    RAGWorkflow, Parser, Indexer,
+    init_embeddings, init_chat_model, init_vectorstore, init_reranker
+)
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+# Initialize components
+embeddings = init_embeddings(
+    model="sentence-transformers/all-MiniLM-L6-v2",
+    provider="huggingface"
+)
+
+llm = init_chat_model(
+    model="gpt-3.5-turbo",
+    model_provider="openai",
+    api_key="sk-..."
+)
+
+vector_store = init_vectorstore(
+    provider="chroma",
+    embeddings=embeddings,
+    collection_name="my_knowledge_base"
+)
+
+reranker = init_reranker(
+    provider="flashrank",
+    model_name="ms-marco-MiniLM-L-12-v2"
+)
+
+# Load and index documents
+parser = Parser(path="./docs", glob="**/*.pdf")
+documents = parser.load_docs()
+
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1000,
+    chunk_overlap=200
+)
+chunks = text_splitter.split_documents(documents)
+
+indexer = Indexer(
+    chunk_size=1000,
+    chunk_overlap=200,
+    vector_store=vector_store
+)
+indexer.store(chunks)
+
+# Create workflow
+rag = RAGWorkflow(
+    embeddings=embeddings,
+    vector_store=vector_store,
+    llm=llm,
+    reranker=reranker,
+    retrieval_config={
+        "search_type": "mmr",
+        "k": 5,
+        "fetch_k": 20
+    }
+)
+
+# Query
+result = rag.get_answer("What are the key features of the product?")
+print(f"Answer: {result.answer}")
+print(f"Sources: {len(result.contexts)}")
+print(f"Cost: ${result.cost.total:.4f}")
+print(f"Latency: {result.latency.total:.2f}s")
+```
+
+---
+
+## Component Initialization
+
+### Embeddings
+
+```python
+from rag_opt import init_embeddings
+
+# HuggingFace (local)
+embeddings = init_embeddings(
+    model="sentence-transformers/all-MiniLM-L6-v2",
+    provider="huggingface"
+)
+
+# OpenAI
+embeddings = init_embeddings(
+    model="text-embedding-3-small",
+    provider="openai",
+    api_key="your-openai-key"
+)
+
+# Cohere
+embeddings = init_embeddings(
+    model="embed-english-v3.0",
+    provider="cohere",
+    api_key="your-cohere-key"
+)
+```
+
+### LLM
+
+```python
+from rag_opt import init_chat_model
+
+# OpenAI
+llm = init_chat_model(
+    model="gpt-4",
+    model_provider="openai",
+    api_key="your-api-key",
+    temperature=0.7
+)
+
+# HuggingFace
+llm = init_chat_model(
+    model="meta-llama/Llama-2-7b-chat-hf",
+    model_provider="huggingface",
+    api_key="your-hf-token"
+)
+
+# Anthropic
+llm = init_chat_model(
+    model="claude-3-sonnet-20240229",
+    model_provider="anthropic",
+    api_key="your-anthropic-key"
+)
+```
+
+### Vector Store
+
+```python
+from rag_opt import init_vectorstore
+
+# Chroma (local)
+vector_store = init_vectorstore(
+    provider="chroma",
+    embeddings=embeddings,
+    collection_name="my_docs"
+)
+
+# Pinecone
+vector_store = init_vectorstore(
+    provider="pinecone",
+    embeddings=embeddings,
+    api_key="your-pinecone-key",
+    index_name="my-index",
+    environment="us-west1-gcp"
+)
+
+# Qdrant
+vector_store = init_vectorstore(
+    provider="qdrant",
+    embeddings=embeddings,
+    url="http://localhost:6333",
+    collection_name="my_collection"
+)
+
+# FAISS (local)
+vector_store = init_vectorstore(
+    provider="faiss",
+    embeddings=embeddings
+)
+```
+
+### Reranker (Optional)
+
+```python
+from rag_opt import init_reranker
+
+# Cross-Encoder (HuggingFace)
+reranker = init_reranker(
+    provider="huggingface",
+    model_name="BAAI/bge-reranker-base"
+)
+
+# Cohere
+reranker = init_reranker(
+    provider="cohere",
+    api_key="your-cohere-key",
+    model_name="rerank-english-v3.0"
+)
+
+# FlashRank (fast, local)
+reranker = init_reranker(
+    provider="flashrank",
+    model_name="ms-marco-MiniLM-L-12-v2"
+)
+
+# Jina AI
+reranker = init_reranker(
+    provider="jina",
+    api_key="your-jina-key",
+    model_name="jina-reranker-v1-base-en"
+)
+```
+
+---
+
+## Document Loading & Indexing
+
+```python
+from rag_opt import Parser, Indexer
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+# Load documents
+parser = Parser(
+    path="./data",
+    glob="**/*.pdf",
+    include_sub_dir=True,
+    use_multithreading=True
+)
+documents = parser.load_docs()
+
+# Or from DataFrame
+import pandas as pd
+df = pd.read_csv("data.csv")
+documents = Parser.from_df(df, page_content_column="text")
+
+# Chunk and store
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=1000,
+    chunk_overlap=200
+)
+chunks = text_splitter.split_documents(documents)
+
+indexer = Indexer(
+    chunk_size=1000,
+    chunk_overlap=200,
+    vector_store=vector_store
+)
+indexer.store(chunks)
+```
+
+---
+
+## Usage
+
+### Single Query
+
+```python
+result = rag.get_answer("What is the capital of France?")
+print(f"Answer: {result.answer}")
+print(f"Contexts: {len(result.contexts)}")
+print(f"Cost: ${result.cost.total:.4f}")
+print(f"Latency: {result.latency.total:.2f}s")
+```
+
+### Batch Processing
+
+```python
+from rag_opt import TrainDataset, TrainDatasetItem
+
+dataset = TrainDataset(items=[
+    TrainDatasetItem(
+        question="What is RAG?",
+        answer="Retrieval Augmented Generation...",
+        contexts=["..."]
+    ),
+    TrainDatasetItem(
+        question="How does vector search work?",
+        answer="Vector search uses...",
+        contexts=["..."]
+    )
+])
+
+eval_dataset = rag.get_batch_answers(dataset)
+eval_dataset.to_json("results.json")
+```
+
+### Using Optimized Configuration
+
+```python
+from rag_opt import RAGConfig
+
+# Load saved config
+config = RAGConfig.from_json("./best_rag_config.json")
+
+# Initialize from config
+embeddings = init_embeddings(
+    model=config.embedding_model,
+    provider=config.embedding_provider
+)
+
+llm = init_chat_model(
+    model=config.llm_model,
+    model_provider=config.llm_provider
+)
+
+vector_store = init_vectorstore(
+    provider=config.vectorstore_provider,
+    embeddings=embeddings
+)
+
+rag = RAGWorkflow(
+    embeddings=embeddings,
+    vector_store=vector_store,
+    llm=llm,
+    retrieval_config={
+        "search_type": config.search_type,
+        "k": config.top_k
+    }
+)
+```
+
+---
+
+## Agentic RAG (Experimental)
+
+<Warning>
+  Agentic RAG is experimental and requires explicit agent initialization.
+</Warning>
+
+```python # Simple agentic answer result = rag.get_agentic_answer( "Compare the features
+of Product A and Product B" )
+
+# Custom agentic RAG
+
+from langchain.agents import AgentExecutor, create_tool_calling_agent
+from langchain.tools.retriever import create_retriever_tool
+from langchain_core.prompts import ChatPromptTemplate
+
+retrieval_tool = create_retriever_tool(
+rag.retrieval,
+"retrieve_docs",
+"Search and return relevant documents"
+)
+
+agent_prompt = ChatPromptTemplate.from_messages([
+("system", "You are a helpful AI assistant with access to a knowledge base."),
+("human", "{input}"),
+("placeholder", "{agent_scratchpad}"),
+])
+
+agent = create_tool_calling_agent(llm, [retrieval_tool], agent_prompt)
+agent_executor = AgentExecutor(agent=agent, tools=[retrieval_tool])
+
+response = agent_executor.invoke({"input": "What is...?"})
+
+```

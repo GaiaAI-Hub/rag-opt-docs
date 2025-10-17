@@ -1,0 +1,177 @@
+---
+title: "4- Evaluation"
+sidebarTitle: "4- Evaluation"
+---
+
+The `RAGEvaluator` measures RAG performance across retrieval, generation, and operational metrics.
+
+## Quick Start
+
+```python
+from rag_opt.eval.evaluator import RAGEvaluator
+from rag_opt import init_chat_model
+from rag_opt.dataset import TrainDataset
+
+# Initialize
+llm = init_chat_model(model="gpt-3.5-turbo", model_provider="openai", api_key="sk-***")
+dataset = TrainDataset.from_json("./rag_dataset.json")
+
+# Evaluate
+evaluator = RAGEvaluator(evaluator_llm=llm)
+results = evaluator.evaluate(eval_dataset)
+```
+
+## Understanding Results
+
+Results return as `MetricResult` objects organized by category:
+
+**Retrieval**: `context_precision`, `context_recall`, `mrr`, `ndcg`  
+**Generation**: `response_relevancy`, `safety`, `alignment`  
+**Operational**: `cost`, `latency`
+
+```python
+{
+    "response_relevancy": MetricResult(name="response_relevancy", value=0.89, category="GENERATION"),
+    "context_precision": MetricResult(name="context_precision", value=0.76, category="RETRIEVAL"),
+    "cost": MetricResult(name="cost", value=0.0234, category="FULL"),
+    ...
+}
+```
+
+Learn more about each metric in [Metrics Overview](/metrics/overview).
+
+## Targeted Evaluation
+
+Evaluate specific categories:
+
+```python
+retrieval_results = evaluator.evaluate_retrieval(eval_dataset)
+generation_results = evaluator.evaluate_generation(eval_dataset)
+full_results = evaluator.evaluate_full(eval_dataset)
+```
+
+## Customization
+
+### Metric Weights
+
+Control metric importance during optimization:
+
+```python
+evaluator = RAGEvaluator(
+    evaluator_llm=llm,
+    objective_weights={
+        "response_relevancy": 0.5,
+        "context_precision": 0.3,
+        "cost": 0.2
+    }
+)
+```
+
+Weights are automatically normalized to sum to 1.0.
+
+### Add/Remove Metrics
+
+```python
+# Remove unwanted metrics
+evaluator.remove_metric("mrr")
+
+# Add custom metric
+from rag_opt.eval.metrics import BaseMetric, MetricCategory, MetricResult
+
+class CustomMetric(BaseMetric):
+    def __init__(self):
+        super().__init__(
+            name="custom_metric",
+            category=MetricCategory.GENERATION,
+            negate=False,  # True if lower is better
+            worst_value=0.0
+        )
+
+    def evaluate(self, dataset, **kwargs):
+        score = self.compute_score(dataset)
+        return MetricResult(name=self.name, value=score, category=self.category)
+
+    def compute_score(self, dataset):
+        return 0.85
+
+evaluator.add_metric(CustomMetric(), weight=0.5)
+```
+
+### Normalization
+
+```python
+results = evaluator.evaluate(
+    eval_dataset,
+    normalize=True,
+    normalization_strategy="sum"  # Options: sum, softmax, min-max, z-score
+)
+```
+
+## Advanced Features
+
+### Batch Evaluation
+
+Evaluate multiple configurations in parallel:
+
+```python
+batch_results = evaluator.evaluate_batch(
+    [dataset1, dataset2, dataset3],
+    return_tensor=True  # Shape: [3, num_metrics]
+)
+```
+
+### Overall Score
+
+Get a single aggregated score:
+
+```python
+overall_score = evaluator.compute_objective_score(results, normalization_strategy="sum")
+```
+
+### Optimizer Integration
+
+```python
+from rag_opt import Optimizer
+
+optimizer = Optimizer(
+    train_dataset=dataset,
+    config_path="./config.yaml",
+    evaluator_llm=llm,
+    custom_evaluator=evaluator
+)
+```
+
+## Complete Example
+
+```python
+from rag_opt.eval.evaluator import RAGEvaluator
+from rag_opt import init_chat_model
+from rag_opt.dataset import TrainDataset
+
+# Setup
+llm = init_chat_model(model="gpt-3.5-turbo", model_provider="openai", api_key="sk-***")
+dataset = TrainDataset.from_json("./rag_dataset.json")
+
+# Create evaluator with custom weights
+evaluator = RAGEvaluator(
+    evaluator_llm=llm,
+    objective_weights={
+        "response_relevancy": 0.7,
+        "cost": 0.2,
+        "latency": 0.1
+    }
+)
+
+# Remove unnecessary metrics
+evaluator.remove_metric("ndcg")
+evaluator.remove_metric("mrr")
+
+# Evaluate with normalization
+results = evaluator.evaluate(eval_dataset, normalize=True)
+
+# Print results
+for metric_name, result in results.items():
+    print(f"{metric_name}: {result.value:.4f}")
+
+print(f"\nOverall Score: {evaluator.compute_objective_score(results):.4f}")
+```

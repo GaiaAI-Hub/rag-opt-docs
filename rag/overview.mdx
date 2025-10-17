@@ -1,0 +1,481 @@
+---
+title: "Configuration Overview"
+description: "Learn how to configure your RAG system with indexing, retrieval, and generation parameters"
+---
+
+<Warning>
+  Having larger configurations and multiple choices may affect the optimization
+  speed and will require more trials to achieve better results.
+</Warning>
+
+## Introduction
+
+The RAG system uses a YAML-based configuration file to define all aspects of your retrieval-augmented generation pipeline. This includes indexing parameters, vector stores, embeddings, retrieval strategies, and language models.
+
+## Configuration Structure
+
+Your configuration file consists of several main sections:
+
+- **Indexing Parameters**: Control how documents are chunked and processed
+- **Vector Stores**: Choose and configure your vector database
+- **Embeddings**: Select embedding models for document representation
+- **Search Configuration**: Define retrieval strategies
+- **Language Models**: Configure generation models
+- **Retrieval Settings**: Fine-tune the number of retrieved documents
+
+## Search Space Types
+
+Each parameter has a `searchspace_type` that defines how it can be configured:
+
+<AccordionGroup>
+  <Accordion title="continuous" icon="slider">
+    Numeric parameters with a range of values
+```yaml
+    chunk_size:
+      searchspace_type: continuous
+      bounds: [500, 2000]
+      dtype: int
+```
+  </Accordion>
+
+  <Accordion title="categorical" icon="list">
+    Parameters with predefined choices
+```yaml
+    vector_store:
+      searchspace_type: categorical
+      choices:
+        faiss: {...}
+        chroma: {...}
+```
+  </Accordion>
+
+  <Accordion title="boolean" icon="toggle-on">
+    True/false parameters
+```yaml
+    use_reranker:
+      searchspace_type: boolean
+      allow_multiple: true
+```
+  </Accordion>
+</AccordionGroup>
+
+## Indexing Parameters
+
+Configure how your documents are processed and chunked.
+
+<ParamField path="chunk_size" type="int" default="512">
+  Size of text chunks in characters - **Range**: 200-2000 - **Recommendation**:
+  500-1000 for most use cases
+</ParamField>
+
+<ParamField path="chunk_overlap" type="int" default="50">
+  Overlap between consecutive chunks in characters - **Range**: 0-500 -
+  **Recommendation**: 10-20% of chunk_size
+</ParamField>
+
+<ParamField path="max_tokens" type="int" default="500">
+  Maximum tokens for generation - **Range**: 100-1000
+</ParamField>
+
+<ParamField path="temperature" type="float" default="0.7">
+  Temperature for generation randomness - **Range**: 0.0-1.0 - **Lower values**:
+  More deterministic - **Higher values**: More creative
+</ParamField>
+
+### Example
+
+```yaml
+chunk_size:
+  searchspace_type: continuous
+  bounds: [500, 2000]
+  dtype: int
+
+chunk_overlap:
+  searchspace_type: continuous
+  bounds: [0, 500]
+  dtype: int
+
+temperature:
+  searchspace_type: continuous
+  bounds: [0.0, 1.0]
+  dtype: float
+```
+
+## Vector Stores
+
+Choose from multiple vector database options, each with different pricing models:
+
+- **[FAISS](https://faiss.ai/)**: Local, free vector store with no cloud costs
+- **[Chroma](https://www.trychroma.com/)**: Open-source vector database with persistent storage
+- **[Pinecone](https://www.pinecone.io/)**: Managed vector database with cloud pricing
+- **[Weaviate](https://weaviate.io/)**: Open-source vector database with cloud version available
+
+### Configuration Structure
+
+```yaml
+vector_store:
+  searchspace_type: categorical
+  choices:
+    <store_name>:
+      api_key: "your_api_key"
+      api_base: null
+      index_name: "your_index"
+      cloud_config: null
+      pricing:
+        storage_per_gb_month: 0.0
+        read_operations_per_1k: 0.0
+        write_operations_per_1k: 0.0
+        query_per_1k: 0.0
+```
+
+### Examples
+
+<Tabs>
+  <Tab title="FAISS (Free)">
+```yaml
+    faiss:
+      api_key: null
+      api_base: null
+      index_name: null
+      cloud_config: null
+      pricing:
+        storage_per_gb_month: 0.0
+        read_operations_per_1k: 0.0
+        write_operations_per_1k: 0.0
+        query_per_1k: 0.0
+```
+  </Tab>
+
+<Tab title="Chroma">
+  ```yaml chroma: api_key: null api_base: null index_name: "my_collection"
+  cloud_config: null pricing: storage_per_gb_month: 0.0 read_operations_per_1k:
+  0.0 write_operations_per_1k: 0.0 query_per_1k: 0.0 ```
+</Tab>
+
+  <Tab title="Weaviate">
+  ```yaml
+    weaviate:
+      api_key: "wv_***"
+      api_base: "https://your-instance.weaviate.network"
+      index_name: "Documents"
+      cloud_config: null
+      pricing:
+        storage_per_gb_month: 0.25
+        read_operations_per_1k: 0.0001
+        write_operations_per_1k: 0.0005
+        query_per_1k: 0.0003
+      ```
+  </Tab>
+</Tabs>
+
+## Embeddings
+
+Select embedding models to convert text into vector representations.
+
+### Supported Providers
+
+- **OpenAI**: High-quality embeddings with various model sizes
+- **HuggingFace**: Free, open-source embedding models
+- **Sentence Transformers**: Optimized models for semantic similarity
+- **Claude**: Anthropic's embedding models
+
+### OpenAI Embeddings
+
+```yaml
+embedding:
+  searchspace_type: categorical
+  choices:
+    openai:
+      api_key: "sk-proj-***"
+      api_base: null
+      models:
+        - "text-embedding-ada-002"
+        - "text-embedding-3-small"
+        - "text-embedding-3-large"
+      pricing:
+        text-embedding-ada-002:
+          cost_per_1k_tokens: 0.0001
+        text-embedding-3-small:
+          cost_per_1k_tokens: 0.00002
+        text-embedding-3-large:
+          cost_per_1k_tokens: 0.00013
+```
+
+<Note>
+  **Recommendation**: `text-embedding-3-small` offers the best balance of cost
+  and performance
+</Note>
+
+### HuggingFace Embeddings
+
+```yaml
+huggingface:
+  api_key: "hf_***"
+  api_base: null
+  models:
+    - "all-MiniLM-L6-v2"
+    - "sentence-transformers/all-mpnet-base-v2"
+  pricing:
+    all-MiniLM-L6-v2:
+      cost_per_1k_tokens: 0.0
+    sentence-transformers/all-mpnet-base-v2:
+      cost_per_1k_tokens: 0.0
+```
+
+<Tip>HuggingFace models are **free** for local or self-hosted deployments</Tip>
+
+### Sentence Transformers
+
+```yaml
+sentence-transformers:
+  api_key: null
+  api_base: null
+  models:
+    - "all-MiniLM-L6-v2"
+    - "multi-qa-mpnet-base-dot-v1"
+    - "paraphrase-multilingual-mpnet-base-v2"
+  pricing:
+    all-MiniLM-L6-v2:
+      cost_per_1k_tokens: 0.0
+```
+
+### Claude Embeddings
+
+```yaml
+claude:
+  api_key: "sk-ant-api03-***"
+  api_base: null
+  models:
+    - "claude-3-embedding"
+  pricing:
+    claude-3-embedding:
+      cost_per_1k_tokens: 0.00001
+```
+
+## Search Types
+
+Configure retrieval strategies for finding relevant documents.
+
+```yaml
+search_type:
+  searchspace_type: categorical
+  choices: ["similarity", "mmr", "bm25", "tfidf", "hybrid"]
+```
+
+### Available Search Types
+
+- **similarity**: Pure vector similarity search using cosine similarity
+- **mmr**: Maximum Marginal Relevance for diversity in results
+- **bm25**: Traditional keyword-based search algorithm
+- **tfidf**: Term frequency-inverse document frequency ranking
+- **hybrid**: Combines vector and keyword search for best results
+
+## Retrieval Settings
+
+```yaml
+k:
+  searchspace_type: continuous
+  bounds: [1, 20]
+  dtype: int
+```
+
+<ParamField path="k" type="int" default="5">
+  Number of documents to retrieve - **Range**: 1-20 - **Lower values**: More
+  focused context - **Higher values**: Broader context, may include noise
+</ParamField>
+
+## Reranking
+
+Optionally rerank retrieved documents for better relevance.
+
+```yaml
+use_reranker:
+  searchspace_type: boolean
+  allow_multiple: true
+
+reranker:
+  searchspace_type: categorical
+  choices:
+    cross_encoder:
+      model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+      top_k: 5
+    colbert:
+      model: "colbert-ir/colbertv2.0"
+      top_k: 5
+    bge:
+      model: "BAAI/bge-reranker-large"
+      top_k: 5
+```
+
+### Available Reranker Types
+
+- **cross_encoder**: Cross-attention models for precise relevance scoring
+- **colbert**: Late interaction models for efficient reranking
+- **bge**: BGE reranker models from Beijing Academy of AI
+
+## Language Models
+
+Configure the LLM for generation. Multiple providers are supported.
+
+### OpenAI Models
+
+```yaml
+llm:
+  searchspace_type: categorical
+  choices:
+    openai:
+      api_key: "sk-proj-***"
+      api_base: null
+      models: ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo", "gpt-4o"]
+      pricing:
+        gpt-3.5-turbo:
+          input: 0.0005
+          output: 0.0015
+        gpt-4o:
+          input: 0.005
+          output: 0.015
+          cache_read: 0.0025
+          cache_creation: 0.0125
+```
+
+### Anthropic Models
+
+```yaml
+anthropic:
+  api_key: "sk-ant-api03-***"
+  api_base: null
+  models:
+    - "claude-3-haiku-20240307"
+    - "claude-3-7-sonnet-latest"
+    - "claude-opus-4-1-20250805"
+  pricing:
+    claude-3-haiku-20240307:
+      input: 0.00025
+      output: 0.00125
+    claude-opus-4-1-20250805:
+      input: 0.015
+      output: 0.075
+```
+
+### Azure OpenAI
+
+```yaml
+azure:
+  api_key: "***"
+  api_base: "https://your-resource.openai.azure.com/"
+  models: ["gpt-35-turbo", "gpt-4"]
+  pricing:
+    gpt-35-turbo:
+      input: 0.0005
+      output: 0.0015
+```
+
+### DeepSeek Models
+
+```yaml
+deepseek:
+  api_key: "sk-***"
+  api_base: null
+  models: ["deepseek-chat", "deepseek-coder"]
+  pricing:
+    deepseek-chat:
+      input: 0.00014
+      output: 0.00028
+```
+
+### HuggingFace Models (Free)
+
+```yaml
+huggingface:
+  api_key: "hf_***"
+  api_base: null
+  models:
+    - "arnir0/Tiny-LLM"
+    - "gpt2-medium"
+    - "BEE-spoke-data/smol_llama-101M-GQA"
+  pricing:
+    gpt2-medium:
+      input: 0.0
+      output: 0.0
+```
+
+## Complete Configuration Example
+
+Here's a complete configuration file with all sections:
+
+```yaml
+# Indexing parameters
+chunk_size:
+  searchspace_type: continuous
+  bounds: [500, 2000]
+  dtype: int
+
+max_tokens:
+  searchspace_type: continuous
+  bounds: [100, 1000]
+  dtype: int
+
+chunk_overlap:
+  searchspace_type: continuous
+  bounds: [0, 500]
+  dtype: int
+
+temperature:
+  searchspace_type: continuous
+  bounds: [0.0, 1.0]
+  dtype: float
+
+# Vector store
+vector_store:
+  searchspace_type: categorical
+  choices:
+    faiss:
+      api_key: null
+      pricing:
+        storage_per_gb_month: 0.0
+
+# Search configuration
+search_type:
+  searchspace_type: categorical
+  choices: ["similarity", "mmr", "hybrid"]
+
+# Embeddings
+embedding:
+  searchspace_type: categorical
+  choices:
+    openai:
+      api_key: "sk-proj-***"
+      models: ["text-embedding-3-small"]
+      pricing:
+        text-embedding-3-small:
+          cost_per_1k_tokens: 0.00002
+
+# Retrieval
+k:
+  searchspace_type: continuous
+  bounds: [1, 20]
+  dtype: int
+
+# Reranking
+use_reranker:
+  searchspace_type: boolean
+  allow_multiple: true
+
+# Generation
+llm:
+  searchspace_type: categorical
+  choices:
+    openai:
+      api_key: "sk-proj-***"
+      models: ["gpt-4o"]
+      pricing:
+        gpt-4o:
+          input: 0.005
+          output: 0.015
+```
+
+Replace all API keys in your configuration file with appropriate placeholders or environment variable references:
+
+```yaml
+api_key: "${OPENAI_API_KEY}" # Reference environment variable
+```

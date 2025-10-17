@@ -1,0 +1,20 @@
+.nav-logo {
+  width: 190px !important;
+  height: auto !important;
+  margin-left: -19px !important;
+  margin-top: 15px !important;
+
+  /** Icon ROOM **/
+  /* padding-left: 9px !important;  */
+
+  /* padding-top: -10px !important; */
+  /* background-image: url("/logo/light.png") !important; */
+  background-position: left center !important;
+  background-repeat: no-repeat !important;
+  background-size: 26px 26px !important;
+}
+
+/* Add this for dark mode */
+.dark .nav-logo {
+  /* background-image: url("/logo/dark.png") !important; */
+}

@@ -1,0 +1,118 @@
+---
+title: "2. Retrieval Metrics"
+description: ""
+# icon: "water"
+---
+
+Retrieval metrics evaluate how well your embedding model, vector store, and reranker find relevant information for your LLM.
+
+## Quick Reference
+
+| Metric               | Measures                          | LLM Required | Best For                  |
+| -------------------- | --------------------------------- | ------------ | ------------------------- |
+| **ContextPrecision** | Relevant docs / Total retrieved   | ✅           | Reducing noise            |
+| **ContextRecall**    | Found info / All relevant info    | ✅           | Avoiding gaps             |
+| **MRR**              | Position of first relevant result | ⚠️ Optional  | Reranker quality          |
+| **NDCG**             | Overall ranking quality           | ❌           | Full ranking optimization |
+
+---
+
+## 1. ContextPrecision
+
+**"How many retrieved documents are actually relevant?"**
+
+```python
+# Formula: TP / (TP + FP)
+from rag_opt.eval import ContextPrecision
+from rag_opt.evaluator import RAGEvaluator
+from rag_opt.llm import RAGLLM
+
+llm = RAGLLM(model="gpt-4")
+metric = ContextPrecision(llm=llm, limit_contexts=5)
+evaluator = RAGEvaluator(metrics=[metric])
+results = evaluator.evaluate(dataset)
+```
+
+**Score Guide:** 0.8+ = Excellent | 0.6-0.8 = Good | 0.4-0.6 = Fair | < 0.4 = Poor
+
+**Options:**
+
+- `limit_contexts`: Evaluate only top N contexts (default: all)
+- `prompt`: Custom relevance judgment prompt
+
+---
+
+## 2. ContextRecall
+
+**"Did I retrieve ALL the information needed?"**
+
+```python
+# Formula: TP / (TP + FN)
+metric = ContextRecall(llm=llm)
+evaluator = RAGEvaluator(metrics=[metric])
+results = evaluator.evaluate(dataset)
+```
+
+**Score Guide:** 0.8+ = Excellent | 0.6-0.8 = Good | 0.4-0.6 = Fair | < 0.4 = Poor
+
+⚠️ **Warning:** Low recall causes hallucinations and incomplete answers.
+
+---
+
+## 3. MRR (Mean Reciprocal Rank)
+
+**"How quickly do I find the first relevant result?"**
+
+```python
+# Formula: 1 / rank_of_first_relevant_result
+metric = MRR()  # No LLM required
+evaluator = RAGEvaluator(metrics=[metric])
+results = evaluator.evaluate(dataset)
+
+# Optional: Enable LLM fallback for better detection
+metric.is_llm_based = True
+metric.llm = llm
+```
+
+**Score Guide:** 0.8+ = Top result | 0.5-0.8 = Top 2-3 | 0.3-0.5 = Position 3-5 | < 0.3 = Buried deep
+
+---
+
+## 4. NDCG (Normalized Discounted Cumulative Gain)
+
+**"How close is my ranking to ideal?"**
+
+```python
+# Formula: DCG / IDCG (normalized 0-1)
+metric = NDCG()  # No LLM required
+evaluator = RAGEvaluator(metrics=[metric])
+results = evaluator.evaluate(dataset)
+```
+
+**Score Guide:** 0.8+ = Near ideal | 0.6-0.8 = Good | 0.4-0.6 = Fair | < 0.4 = Poor
+
+**MRR vs NDCG:**
+
+- Use **MRR** when users look at only the first result
+- Use **NDCG** when overall ranking quality matters
+
+---
+
+## Evaluate All Together
+
+```python
+from rag_opt.eval import ContextPrecision, ContextRecall, MRR, NDCG
+
+metrics = [
+    ContextPrecision(llm=llm, limit_contexts=5),
+    ContextRecall(llm=llm),
+    MRR(),
+    NDCG()
+]
+
+evaluator = RAGEvaluator(metrics=metrics)
+results = evaluator.evaluate(dataset)
+
+for result in results:
+    print(f"{result.name}: {result.value:.3f}")
+```

@@ -1,0 +1,205 @@
+---
+title: "Searchspace"
+sidebarTitle: "2- Searchspace"
+---
+
+The search space defines the hyperparameter ranges and choices that the optimizer explores to find optimal RAG configurations.
+
+## Overview
+
+RAGOpt uses a `RAGSearchSpace` to define all tunable parameters including:
+
+- Chunking parameters (size, overlap)
+- Retrieval settings (k, search type)
+- Model selections (LLM, embeddings, vector store, reranker)
+- Generation parameters (temperature)
+
+**Important**: You typically don't need to customize the search space manually. The default configuration or YAML-based config is sufficient for most use cases.
+
+## How It Works
+
+Under the hood, the search space:
+
+1. Defines parameter types (continuous, categorical, boolean)
+2. Sets valid ranges and choices
+3. Handles encoding/decoding for Bayesian Optimization
+4. Manages component pricing information
+
+The optimizer uses this to:
+
+- Sample configurations efficiently (Sobol, Random, QMC)
+- Convert between tensor representations and RAGConfig objects
+- Evaluate configurations during optimization
+
+## Default Configuration
+
+RAGOpt provides sensible defaults out of the box:
+
+```python
+from rag_opt.search_space import RAGSearchSpace
+
+# Use default search space
+search_space = RAGSearchSpace.get_default_search_space_config()
+```
+
+Default ranges include:
+
+- **chunk_size**: 200-2000 tokens
+- **chunk_overlap**: 0-500 tokens
+- **k**: 1-20 retrieved documents
+- **temperature**: 0.0-2.0
+- **search_type**: similarity, mmr, bm25, hybrid
+- **vector_stores**: FAISS, Chroma, Pinecone, Weaviate
+- **embeddings**: OpenAI, HuggingFace, Sentence Transformers
+- **llms**: OpenAI GPT, Anthropic Claude
+
+## YAML Configuration
+
+For custom configurations, define a YAML file:
+
+```yaml
+# rag_config.yaml
+chunk_size:
+  searchspace_type: continuous
+  bounds: [200, 2000]
+  dtype: int
+
+chunk_overlap:
+  searchspace_type: continuous
+  bounds: [0, 500]
+  dtype: int
+
+k:
+  searchspace_type: continuous
+  bounds: [1, 20]
+  dtype: int
+
+temperature:
+  searchspace_type: continuous
+  bounds: [0.0, 2.0]
+  dtype: float
+
+search_type:
+  searchspace_type: categorical
+  choices: ["similarity", "mmr", "bm25", "hybrid"]
+
+llm:
+  searchspace_type: categorical
+  choices:
+    openai:
+      provider: openai
+      models: ["gpt-3.5-turbo", "gpt-4"]
+      pricing:
+        gpt-3.5-turbo:
+          input: 0.0015
+          output: 0.002
+    anthropic:
+      provider: anthropic
+      models: ["claude-3-7-sonnet-latest"]
+      pricing:
+        claude-3-7-sonnet-latest:
+          input: 0.003
+          output: 0.015
+
+embedding:
+  searchspace_type: categorical
+  choices:
+    openai:
+      provider: openai
+      models: ["text-embedding-ada-002"]
+    huggingface:
+      provider: huggingface
+      models: ["all-MiniLM-L6-v2"]
+
+vector_store:
+  searchspace_type: categorical
+  choices:
+    faiss:
+      provider: faiss
+    chroma:
+      provider: chroma
+
+use_reranker:
+  searchspace_type: boolean
+  allow_multiple: true
+
+reranker:
+  searchspace_type: categorical
+  choices:
+    cross_encoder:
+      provider: cross_encoder
+      models: ["msmarco-MiniLM-L-6-v3"]
+```
+
+Load it in the optimizer:
+
+```python
+from rag_opt.search_space import RAGSearchSpace
+
+search_space = RAGSearchSpace.from_yaml("./rag_config.yaml")
+```
+
+## Parameter Types
+
+### Continuous Parameters
+
+Numeric ranges for values like chunk_size, temperature:
+
+```yaml
+chunk_size:
+  searchspace_type: continuous
+  bounds: [200, 2000]
+  dtype: int
+```
+
+### Categorical Parameters
+
+Discrete choices like models or search strategies:
+
+```yaml
+search_type:
+  searchspace_type: categorical
+  choices: ["similarity", "mmr", "bm25"]
+```
+
+### Boolean Parameters
+
+Binary decisions like enabling reranking:
+
+```yaml
+use_reranker:
+  searchspace_type: boolean
+  allow_multiple: true
+```
+
+## Pricing Configuration
+
+Include cost information for optimization:
+
+```yaml
+llm:
+  choices:
+    openai:
+      models: ["gpt-4"]
+      pricing:
+        gpt-4:
+          input: 0.03 # per 1K tokens
+          output: 0.06 # per 1K tokens
+```
+
+This enables cost-aware optimization in multi-objective scenarios.
+
+## Sampling Methods
+
+The search space supports multiple sampling strategies:
+
+```python
+# Sobol sampling (default, best for optimization)
+configs = search_space.sample(n_samples=10, sampler_type=SamplerType.SOBOL)
+
+# Random sampling
+configs = search_space.sample(n_samples=10, sampler_type=SamplerType.RANDOM)
+
+# Quasi-Monte Carlo
+configs = search_space.sample(n_samples=10, sampler_type=SamplerType.QUASI_MONTE_CARLO)
+```

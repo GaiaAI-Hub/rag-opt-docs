@@ -1,97 +1,157 @@
 ---
 title: "Introduction"
-description: "Welcome to the new home for your documentation"
+description: ""
 ---
 
-## Setting up
+<p align="center">
+  <img src="/logo/light2.svg" alt="Alt text describing the image" width="400" />
+  <br />
+  <figcaption>
+    <small>Light version of the company logo</small>
+  </figcaption>
+</p>
 
-Get your documentation site up and running in minutes.
+**RAGOpt** is a Python optimization framework that eliminates manual hyperparameter guesswork in your RAG pipelines.
+It uses Bayesian optimization to systematically tune over 20+ hyperparameters, from chunk size and overlap to model selection and embedding strategies automatically discovering the best configurations for your specific use case
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+---
 
-## Make it yours
+### Why RAGOpt?
 
-Design a docs site that looks great and empowers your users.
+Optimizing Retrieval-Augmented Generation (RAG) pipelines is complex and highly dependent on configuration choices that impact quality, latency, and cost.
+Unlike [AutoRAG](https://github.com/Marker-Inc-Korea/AutoRAG), which relies on grid search, or [Ragas](https://github.com/explodinggradients/ragas), which enforces rigid evaluation frameworks, RAGOpt is partially opinionated: it provides smart defaults while staying flexible with any LangChain-compatible model or provider.
+
+RAGOpt helps answer a question like:
+
+> **What’s the best RAG configuration to minimize cost and latency while maintaining accuracy and safety ?**
+
+For example, here's you can get best RAG configurations in a few iterations using RAGOpt optimizer:
+
+<CodeGroup>
+
+```python 📈 optimize.py
+from rag_opt.dataset import TrainDataset
+from rag_opt.optimizer import Optimizer
+
+# First you have to run generate_questions_.py
+# to get a list of QAs to be used in the evaluation process
+
+# Load the training dataset (questions/answers)
+train_dataset = TrainDataset.from_json("rag_dataset.json")
+
+# Initialize the optimizer
+optimizer = Optimizer(
+train_dataset=train_dataset,
+config_path="rag_config.yaml",
+verbose=True
+)
+
+# Run optimization
+# Increase n_trials for better results
+best_config = optimizer.optimize(n_trials=2, best_one=True,plot_hypervolume=True)
+best_config.to_json()
+
+```
+
+```yaml ⚙️ rag_config.yaml
+# 1- define here the RAG Hyperparameters u would like to optimize
+chunk_size:
+  bounds: [512, 1024]
+  dtype: int
+
+max_tokens:
+bounds: [256, 512]
+dtype: int
+
+vector_store:
+---
+# More Parameters
+```
+
+```python 🤖 generate_questions.py
+from langchain.chat_models import init_chat_model
+from rag_opt.rag import DatasetGenerator
+
+# 1- Generate list of questions / answers to be used in RAG evaluation
+
+# Initialize the language model
+llm = init_chat_model(
+model="gpt-3.5-turbo",
+model_provider="openai",
+api_key="sk-\*\*\*"
+)
+
+# Generates 3 training questions
+# you can also path a file like dataset_path=myfile.pdf
+data_gen = DatasetGenerator(llm,dataset_path="./data")
+dataset = data_gen.generate(3)
+dataset.to_json("./questions.json")
+
+```
+
+```json 🧾 questions.json
+{
+  "items": [
+    {
+      "question": "What is the capital city of Japan?",
+      "answer": "The capital city of Japan is Tokyo.",
+      "contexts": [
+        "Tokyo is the capital of Japan, though some still picture Kyoto when they hear 'old Japan'.",
+        "Neon lights and ancient temples coexist where decisions shape the nation.",
+        "It’s a city where tradition bows to innovation every single day."
+      ],
+      "metadata": {}
+    },
+    {
+      "question": "Who won the Nobel Peace Prize in 2025?",
+      "answer": "The Nobel Peace Prize in 2025 was awarded to María Corina Machado.",
+      "contexts": [
+        "María Corina Machado received the Nobel Peace Prize in 2025, proving persistence can echo louder than politics.",
+        "Donald Trump didn’t get the Nobel Prize; however, the announcement stirred global chatter.",
+        "Sometimes peace arrives wearing the voice of defiance and hope."
+      ],
+      "metadata": {}
+    }
+  ]
+}
+```
+
+</CodeGroup>
+
+This will give you the optimal RAG configuration for your dataset.
+
+```yaml
+{
+  "chunk_size": 500,
+  "max_tokens": 100,
+  "chunk_overlap": 200,
+  "search_type": "hybrid",
+  "k": 1,
+  "temperature": 1.0,
+  "embedding": { "provider": "openai", "model": "text-embedding-3-large" },
+  "llm": { "provider": "openai", "model": "gpt-4o" },
+  "vector_store": { "provider": "faiss" },
+  "use_reranker": true,
+}
+```
+
+## Get Started
 
 <Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get started with RAGOpt in under 5 minutes.
+  </Card>
+  <Card title="Main Concepts" icon="book" href="/concepts">
+    Get familiar with the underlying architecture and key design of RAGOpt
+  </Card>
+  <Card title="Configuration Guide" icon="sliders" href="/rag/overview">
+    Learn about the Hyperparameters RAG Configuration file in details
   </Card>
   <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
+    title="Optimization Workflows"
+    icon="diagram-project"
+    href="/optimization/overview"
   >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+    Integrate RAGOpt with your custom RAG pipeline.
   </Card>
 </Columns>
-
-## Create beautiful pages
-
-Everything you need to create world-class documentation.
-
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
-
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
