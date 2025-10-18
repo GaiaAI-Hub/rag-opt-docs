@@ -124,9 +124,10 @@ train_dataset = TrainDataset.from_json("rag_dataset.json")
 
 # Initialize the optimizer
 optimizer = Optimizer(
-    train_dataset=train_dataset,
-    config_path="rag_config.yaml",  # Path to your config file
-    verbose=True
+train_dataset=train_dataset,
+config_path="rag_config.yaml",
+acquisition_functions=['qEHVI','Random'], # ['qEHVI', 'qNEHVI', 'qNParEGO', 'Random']
+verbose=True
 )
 
 # Run optimization
