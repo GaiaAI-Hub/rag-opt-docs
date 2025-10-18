@@ -24,8 +24,8 @@ The optimization workflow consists of five key components working together:
 Here's a minimal example to get started:
 
 ```python
-from rag_opt import Optimizer
 from rag_opt.dataset import TrainDataset
+from rag_opt.optimizer import Optimizer
 
 # Load your dataset
 dataset = TrainDataset.from_json("./rag_dataset.json")
@@ -37,5 +37,5 @@ optimizer = Optimizer(
 )
 
 # Run optimization
-best_configs = optimizer.optimize(n_trials=50)
+best_configs = optimizer.optimize(n_trials=3)
 ```

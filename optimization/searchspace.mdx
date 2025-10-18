@@ -194,12 +194,10 @@ This enables cost-aware optimization in multi-objective scenarios.
 The search space supports multiple sampling strategies:
 
 ```python
+from rag_opt import SamplerType
 # Sobol sampling (default, best for optimization)
 configs = search_space.sample(n_samples=10, sampler_type=SamplerType.SOBOL)
 
 # Random sampling
 configs = search_space.sample(n_samples=10, sampler_type=SamplerType.RANDOM)
-
-# Quasi-Monte Carlo
-configs = search_space.sample(n_samples=10, sampler_type=SamplerType.QUASI_MONTE_CARLO)
 ```

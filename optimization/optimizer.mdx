@@ -8,7 +8,7 @@ The `Optimizer` class finds Pareto-optimal RAG configurations using Multi-Object
 ## Quick Start
 
 ```python
-from rag_opt import Optimizer
+from rag_opt.optimizer import Optimizer
 from rag_opt.dataset import TrainDataset
 
 # Load dataset and run optimization
@@ -16,7 +16,7 @@ dataset = TrainDataset.from_json("./rag_dataset.json")
 optimizer = Optimizer(train_dataset=dataset, config_path="./rag_config.yaml")
 
 # Get best configuration
-best_config = optimizer.optimize(n_trials=50, best_one=True)
+best_config = optimizer.optimize(n_trials=3, best_one=True)
 print(f"LLM: {best_config.llm.model}")
 print(f"Embeddings: {best_config.embedding.model}")
 print(f"Chunk size: {best_config.chunk_size}")
@@ -37,11 +37,11 @@ print(f"Chunk size: {best_config.chunk_size}")
 optimizer = Optimizer(
     train_dataset=dataset,
     config_path="./rag_config.yaml",
-    verbose=True  # Enable progress logging
+    verbose=True
 )
 
 # Run optimization (more trials = better exploration)
-best_configs = optimizer.optimize(n_trials=50)
+best_configs = optimizer.optimize(n_trials=3)
 ```
 
 ### Advanced Options
@@ -63,127 +63,9 @@ optimizer = Optimizer(
 )
 ```
 
-## Working with Results
-
-### Single Best Configuration
-
-```python
-best_config = optimizer.optimize(n_trials=50, best_one=True)
-
-# Deploy in production
-from rag_opt.rag import RAGWorkflow
-
-rag = RAGWorkflow.from_config(config=best_config, documents=your_documents)
-response = rag.query("Your question")
-```
-
-### Multiple Configurations
-
-Different acquisition functions return different trade-offs:
-
-```python
-best_configs = optimizer.optimize(n_trials=50)
-
-for acq_func, config in best_configs.items():
-    print(f"\n{acq_func}:")
-    print(f"  LLM: {config.llm.provider}/{config.llm.model}")
-    print(f"  Embeddings: {config.embedding.provider}/{config.embedding.model}")
-    print(f"  Chunk Size: {config.chunk_size}, k: {config.k}")
-    print(f"  Temperature: {config.temperature}")
-```
-
-### Understanding Trade-offs
-
-The optimizer finds configurations balancing:
-
-- **Cost**: API/compute expenses
-- **Latency**: Response time
-- **Quality**: Retrieval and generation accuracy
-
-Example Pareto frontier:
-
-```
-Config A: Low cost, medium latency, high quality
-Config B: Medium cost, low latency, high quality
-Config C: High cost, low latency, highest quality
-```
-
-## Advanced Customization
-
-### Custom Evaluator
-
-```python
-from rag_opt.eval.evaluator import RAGEvaluator
-from rag_opt.eval._problem import RAGOptimizationProblem
-
-evaluator = RAGEvaluator(
-    evaluator_llm=llm,
-    objective_weights={
-        "cost": 0.4,
-        "latency": 0.1,
-        "response_relevancy": 0.5
-    }
-)
-
-problem = RAGOptimizationProblem(
-    train_dataset=dataset,
-    rag_pipeline_manager=manager,
-    evaluator=evaluator
-)
-
-optimizer = Optimizer(train_dataset=dataset, config_path="./config.yaml", problem=problem)
-```
-
-### Custom Bayesian Optimizer
-
-```python
-from fastmobo import FastMobo
-
-mobo = FastMobo(
-    problem=problem.create_fastmobo_problem(),
-    acquisition_functions=['qEHVI', 'qNEHVI'],
-    batch_size=4,
-    n_initial=20
-)
-
-optimizer = Optimizer(train_dataset=dataset, config_path="./config.yaml", optimizer=mobo)
-```
-
 ## Performance Tips
 
-**Start small**: Test with `n_trials=10`, then scale to 50-100 for production
-
-**Enable logging**: Set `verbose=True` to monitor convergence
-
-**Eager loading**: For small search spaces, use `eager_load=True` in RAGPipelineManager
-
-**Parallel evaluation**: Adjust `max_workers` in RAGPipelineManager for faster optimization
-
-## Complete Example
-
-```python
-from rag_opt import Optimizer
-from rag_opt.dataset import TrainDataset
-from rag_opt.rag import RAGWorkflow
-
-# Load and optimize
-dataset = TrainDataset.from_json("./rag_dataset.json")
-optimizer = Optimizer(train_dataset=dataset, config_path="./config.yaml", verbose=True)
-
-print("Starting optimization...")
-best_config = optimizer.optimize(n_trials=50, best_one=True)
-
-# Review results
-print(f"\nOptimal Configuration:")
-print(f"  LLM: {best_config.llm.provider}/{best_config.llm.model}")
-print(f"  Embeddings: {best_config.embedding.provider}/{best_config.embedding.model}")
-print(f"  Chunk Size: {best_config.chunk_size}, k: {best_config.k}")
-
-# Save and deploy
-best_config.to_yaml("./best_rag_config.yaml")
-rag = RAGWorkflow.from_config(config=best_config, documents=your_documents)
-
-# Test
-response = rag.query("What is the capital of France?")
-print(f"Test Response: {response}")
-```
+1. **Start small**: Test with `n_trials=5`, then scale to 50-100 for production
+2. **Eager loading**: For small search spaces, use `eager_load=True` in RAGPipelineManager
+3. **Parallel evaluation**: Adjust `max_workers` in RAGPipelineManager for faster optimization
+4. **Hugginface**: Using Hugging Face models will slow down the optimization process.

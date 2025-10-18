@@ -22,15 +22,17 @@ Retrieval metrics evaluate how well your embedding model, vector store, and rera
 **"How many retrieved documents are actually relevant?"**
 
 ```python
-# Formula: TP / (TP + FP)
-from rag_opt.eval import ContextPrecision
-from rag_opt.evaluator import RAGEvaluator
-from rag_opt.llm import RAGLLM
+from rag_opt.eval import RAGEvaluator,ContextPrecision
+from rag_opt import init_chat_model
 
-llm = RAGLLM(model="gpt-4")
+llm = init_chat_model(model="gpt-3.5-turbo",
+                    model_provider="openai",
+                    api_key=OPENAI_API_KEY)
+
 metric = ContextPrecision(llm=llm, limit_contexts=5)
 evaluator = RAGEvaluator(metrics=[metric])
-results = evaluator.evaluate(dataset)
+eval_dataset = ... # evaluation dataset from RAG
+results = evaluator.evaluate(eval_dataset,return_tensor=False)
 ```
 
 **Score Guide:** 0.8+ = Excellent | 0.6-0.8 = Good | 0.4-0.6 = Fair | < 0.4 = Poor
@@ -47,10 +49,17 @@ results = evaluator.evaluate(dataset)
 **"Did I retrieve ALL the information needed?"**
 
 ```python
-# Formula: TP / (TP + FN)
+from rag_opt.eval import RAGEvaluator,ContextRecall
+from rag_opt import init_chat_model
+
+llm = init_chat_model(model="gpt-3.5-turbo",
+                    model_provider="openai",
+                    api_key=OPENAI_API_KEY)
+
 metric = ContextRecall(llm=llm)
 evaluator = RAGEvaluator(metrics=[metric])
-results = evaluator.evaluate(dataset)
+eval_dataset = ... # rag.get_batch_answers(train_dataset)
+results = evaluator.evaluate(eval_dataset,return_tensor=False)
 ```
 
 **Score Guide:** 0.8+ = Excellent | 0.6-0.8 = Good | 0.4-0.6 = Fair | < 0.4 = Poor
@@ -64,14 +73,18 @@ results = evaluator.evaluate(dataset)
 **"How quickly do I find the first relevant result?"**
 
 ```python
-# Formula: 1 / rank_of_first_relevant_result
-metric = MRR()  # No LLM required
-evaluator = RAGEvaluator(metrics=[metric])
-results = evaluator.evaluate(dataset)
+from rag_opt.eval import RAGEvaluator,MRR
+from rag_opt import init_embeddings
 
-# Optional: Enable LLM fallback for better detection
-metric.is_llm_based = True
-metric.llm = llm
+# embedding is required for MRR
+embeddings = init_embeddings(model="all-MiniLM-L6-v2",
+                             model_provider="huggingface",
+                             api_key=HUGGINFACE_API_KEY)
+
+metric = MRR(embedding_model=embeddings)
+evaluator = RAGEvaluator(metrics=[metric])
+eval_dataset = ... # rag.get_batch_answers(train_dataset)
+results = evaluator.evaluate(eval_dataset,return_tensor=False)
 ```
 
 **Score Guide:** 0.8+ = Top result | 0.5-0.8 = Top 2-3 | 0.3-0.5 = Position 3-5 | < 0.3 = Buried deep
@@ -83,10 +96,18 @@ metric.llm = llm
 **"How close is my ranking to ideal?"**
 
 ```python
-# Formula: DCG / IDCG (normalized 0-1)
-metric = NDCG()  # No LLM required
+from rag_opt.eval import RAGEvaluator,NDCG
+from rag_opt import init_embeddings
+
+# embedding is required for NDCG
+embeddings = init_embeddings(model="all-MiniLM-L6-v2",
+                             model_provider="huggingface",
+                             api_key=HUGGINFACE_API_KEY)
+
+metric = NDCG(embedding_model=embeddings)
 evaluator = RAGEvaluator(metrics=[metric])
-results = evaluator.evaluate(dataset)
+eval_dataset = ... # rag.get_batch_answers(train_dataset)
+results = evaluator.evaluate(eval_dataset,return_tensor=False)
 ```
 
 **Score Guide:** 0.8+ = Near ideal | 0.6-0.8 = Good | 0.4-0.6 = Fair | < 0.4 = Poor
@@ -101,18 +122,29 @@ results = evaluator.evaluate(dataset)
 ## Evaluate All Together
 
 ```python
-from rag_opt.eval import ContextPrecision, ContextRecall, MRR, NDCG
+rom rag_opt.eval import ContextPrecision, ContextRecall, MRR, NDCG
+from rag_opt import init_chat_model, init_embeddings
+
+
+llm = init_chat_model(model="gpt-3.5-turbo",
+                    model_provider="openai",
+                    api_key=OPENAI_API_KEY)
+
+embeddings = init_embeddings(model="all-MiniLM-L6-v2",
+                             model_provider="huggingface",
+                             api_key=HUGGINFACE_API_KEY)
 
 metrics = [
     ContextPrecision(llm=llm, limit_contexts=5),
     ContextRecall(llm=llm),
-    MRR(),
-    NDCG()
+    MRR(embedding_model=embeddings),
+    NDCG(embedding_model=embeddings)
 ]
 
 evaluator = RAGEvaluator(metrics=metrics)
-results = evaluator.evaluate(dataset)
+eval_dataset = ... # rag.get_batch_answers(train_dataset)
+results = evaluator.evaluate(eval_dataset,return_tensor=False)
 
-for result in results:
+for result in results.items():
     print(f"{result.name}: {result.value:.3f}")
 ```

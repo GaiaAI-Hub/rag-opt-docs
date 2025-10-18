@@ -8,17 +8,48 @@ The `RAGEvaluator` measures RAG performance across retrieval, generation, and op
 ## Quick Start
 
 ```python
-from rag_opt.eval.evaluator import RAGEvaluator
-from rag_opt import init_chat_model
+from rag_opt import init_chat_model, init_embeddings, init_vectorstore
+from rag_opt.rag import RAGWorkflow
+from rag_opt.eval.eval import RAGEvaluator
 from rag_opt.dataset import TrainDataset
 
-# Initialize
-llm = init_chat_model(model="gpt-3.5-turbo", model_provider="openai", api_key="sk-***")
-dataset = TrainDataset.from_json("./rag_dataset.json")
+# Initialize RAG Workflow
+llm = init_chat_model(model="gpt-3.5-turbo", model_provider="openai", api_key=OPENAI_API_KEY)
+embeddings = init_embeddings(
+    model="all-MiniLM-L6-v2",
+    model_provider="huggingface",
+    api_key=HUGGINFACE_API_KEY
+)
+llm = init_chat_model(
+    model="gpt-3.5-turbo",
+    model_provider="openai",
+    api_key=OPENAI_API_KEY
+)
+
+vector_store = init_vectorstore(
+    provider="faiss",
+    embeddings=embeddings,
+)
+
+rag = RAGWorkflow(
+    embeddings=embeddings,
+    vector_store=vector_store,
+    llm=llm,
+    retrieval_config={
+        "search_type": "hybrid",
+        "k": 3
+    },
+)
+
+# generate evaluation dataset (to be used by evaluator)
+train_dataset = TrainDataset.from_json("./rag_dataset.json")
+eval_dataset = rag.get_batch_answers(train_dataset)
+
 
 # Evaluate
-evaluator = RAGEvaluator(evaluator_llm=llm)
-results = evaluator.evaluate(eval_dataset)
+evaluator = RAGEvaluator(evaluator_llm=llm,evaluator_embedding=embeddings)
+results = evaluator.evaluate(eval_dataset,return_tensor=False)
+print(results)
 ```
 
 ## Understanding Results
@@ -59,6 +90,7 @@ Control metric importance during optimization:
 ```python
 evaluator = RAGEvaluator(
     evaluator_llm=llm,
+    evaluator_embedding=embeddings,
     objective_weights={
         "response_relevancy": 0.5,
         "context_precision": 0.3,
@@ -77,22 +109,21 @@ evaluator.remove_metric("mrr")
 
 # Add custom metric
 from rag_opt.eval.metrics import BaseMetric, MetricCategory, MetricResult
+from rag_opt.dataset import EvaluationDataset
 
 class CustomMetric(BaseMetric):
+    is_llm_based: bool = False # Make True if this metric requires llm
+    category: MetricCategory = MetricCategory.GENERATION
+    name: str = "my_custom_metric"
+
     def __init__(self):
         super().__init__(
-            name="custom_metric",
-            category=MetricCategory.GENERATION,
             negate=False,  # True if lower is better
             worst_value=0.0
         )
-
-    def evaluate(self, dataset, **kwargs):
-        score = self.compute_score(dataset)
-        return MetricResult(name=self.name, value=score, category=self.category)
-
-    def compute_score(self, dataset):
-        return 0.85
+    def _evaluate(self, dataset:EvaluationDataset, **kwargs) -> list[float]:
+        """ Your evaluation logic here"""
+        return [0.85 for _ in dataset.items]
 
 evaluator.add_metric(CustomMetric(), weight=0.5)
 ```
@@ -102,6 +133,7 @@ evaluator.add_metric(CustomMetric(), weight=0.5)
 ```python
 results = evaluator.evaluate(
     eval_dataset,
+    return_tensor=False,
     normalize=True,
     normalization_strategy="sum"  # Options: sum, softmax, min-max, z-score
 )
@@ -115,36 +147,26 @@ Evaluate multiple configurations in parallel:
 
 ```python
 batch_results = evaluator.evaluate_batch(
-    [dataset1, dataset2, dataset3],
-    return_tensor=True  # Shape: [3, num_metrics]
+    [eval_dataset1],
+    return_tensor=False
 )
-```
-
-### Overall Score
-
-Get a single aggregated score:
-
-```python
-overall_score = evaluator.compute_objective_score(results, normalization_strategy="sum")
 ```
 
 ### Optimizer Integration
 
 ```python
-from rag_opt import Optimizer
-
+from rag_opt.optimizer import Optimizer
 optimizer = Optimizer(
     train_dataset=dataset,
-    config_path="./config.yaml",
+    config_path="./rag_config.yaml",
     evaluator_llm=llm,
-    custom_evaluator=evaluator
 )
 ```
 
 ## Complete Example
 
 ```python
-from rag_opt.eval.evaluator import RAGEvaluator
+from rag_opt.eval.eval import RAGEvaluator
 from rag_opt import init_chat_model
 from rag_opt.dataset import TrainDataset
 
@@ -171,7 +193,7 @@ results = evaluator.evaluate(eval_dataset, normalize=True)
 
 # Print results
 for metric_name, result in results.items():
-    print(f"{metric_name}: {result.value:.4f}")
+    print(f"{metric_name}: {result.value}")
 
-print(f"\nOverall Score: {evaluator.compute_objective_score(results):.4f}")
+print(f"\nOverall Score: {evaluator.compute_objective_score(results)}")
 ```

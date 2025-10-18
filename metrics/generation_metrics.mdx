@@ -29,13 +29,16 @@ Generation metrics evaluate the quality of your LLM's responses using an LLM-as-
 ### Basic Usage
 
 ```python
-from rag_opt.eval import SafetyMetric
-from rag_opt.evaluator import RAGEvaluator
-from rag_opt.llm import RAGLLM
+from rag_opt.eval import SafetyMetric,RAGEvaluator
+from rag_opt import init_chat_model
 
-llm = RAGLLM(model="gpt-4")
+llm = init_chat_model(model="gpt-3.5-turbo",
+                    model_provider="openai",
+                    api_key=OPENAI_API_KEY)
+
 metric = SafetyMetric(llm=llm)
 evaluator = RAGEvaluator(metrics=[metric])
+eval_dataset = ... # rag.get_batch_answers(train_dataset)
 results = evaluator.evaluate(dataset)
 
 print(f"Safety Score: {results[0].value:.3f}")
@@ -44,8 +47,13 @@ print(f"Safety Score: {results[0].value:.3f}")
 ### Configuration
 
 ```python
-# Limit contexts (reduces cost)
-metric = SafetyMetric(llm=llm, limit_contexts=3)
+from rag_opt.dataset import EvaluationDataset,EvaluationDatasetItem,GroundTruth
+from rag_opt.eval import SafetyMetric,RAGEvaluator
+from rag_opt import init_chat_model
+
+llm = init_chat_model(model="gpt-3.5-turbo",
+                    model_provider="openai",
+                    api_key=OPENAI_API_KEY)
 
 # Custom prompt (must include {contexts}, {question}, {answer})
 custom_prompt = """
@@ -63,6 +71,19 @@ Rate faithfulness (0-100):
 Return only a number.
 """
 metric = SafetyMetric(llm=llm, prompt=custom_prompt)
+evaluator = RAGEvaluator(metrics=[metric])
+eval_dataset = EvaluationDataset(
+    items=[
+        EvaluationDatasetItem(
+        question="what is my name",
+        answer="John",
+        contexts=["My name is John"],
+        ground_truth=GroundTruth(answer="John", contexts=["My name is John"]),
+    )]
+)
+results = evaluator.evaluate(eval_dataset,return_tensor=False)
+for _,result in results.items():
+    print(f" Score: {result.value:.3f}")
 ```
 
 ---
@@ -74,13 +95,14 @@ metric = SafetyMetric(llm=llm, prompt=custom_prompt)
 ### Basic Usage
 
 ```python
-from rag_opt.eval import AlignmentMetric
+from rag_opt.eval import AlignmentMetric,RAGEvaluator
 
+llm = ...
 metric = AlignmentMetric(llm=llm)
 evaluator = RAGEvaluator(metrics=[metric])
-results = evaluator.evaluate(dataset)
+results = evaluator.evaluate(eval_dataset,return_tensor=False)
 
-print(f"Alignment Score: {results[0].value:.3f}")
+print(f"results: {results}")
 ```
 
 ---
@@ -92,37 +114,13 @@ print(f"Alignment Score: {results[0].value:.3f}")
 ### Basic Usage
 
 ```python
-from rag_opt.eval import ResponseRelevancy
+from rag_opt.eval import ResponseRelevancy,RAGEvaluator
 
 metric = ResponseRelevancy(llm=llm)
 evaluator = RAGEvaluator(metrics=[metric])
-results = evaluator.evaluate(dataset)
+results = evaluator.evaluate(eval_dataset,return_tensor=False)
 
-print(f"Response Relevancy: {results[0].value:.3f}")
-```
-
----
-
-## Using Multiple Metrics
-
-### Comprehensive Evaluation
-
-```python
-from rag_opt.eval import SafetyMetric, AlignmentMetric, ResponseRelevancy
-
-metrics = [
-    SafetyMetric(llm=llm, limit_contexts=5),
-    AlignmentMetric(llm=llm, limit_contexts=5),
-    ResponseRelevancy(llm=llm, limit_contexts=5)
-]
-
-evaluator = RAGEvaluator(metrics=metrics)
-results = evaluator.evaluate(dataset)
-
-print("=== Generation Quality Report ===")
-print(f"Safety:    {results[0].value:.3f}")
-print(f"Alignment: {results[1].value:.3f}")
-print(f"Relevancy: {results[2].value:.3f}")
+print(f"results: {results}")
 ```
 
 ---

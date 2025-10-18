@@ -26,10 +26,10 @@ The manager operates in several key phases:
 When created, the manager:
 
 ```python
-from rag_opt._manager import RAGPipelineManager
 from rag_opt.search_space import RAGSearchSpace
+from rag_opt import RAGPipelineManager
 
-search_space = RAGSearchSpace.from_yaml("./config.yaml")
+search_space = RAGSearchSpace.from_yaml("./rag_config.yaml")
 
 manager = RAGPipelineManager(
     search_space=search_space,
@@ -59,8 +59,18 @@ The manager samples configurations from the search space:
 
 ```python
 # Sample RAG configurations
-configs = manager._search_space.sample(
-    n_samples=20,
+from rag_opt import SamplerType,RAGPipelineManager
+from rag_opt.search_space import RAGSearchSpace
+
+search_space = RAGSearchSpace.from_yaml("./rag_config.yaml")
+manager = RAGPipelineManager(
+    search_space=search_space,
+    eager_load=False,  # Load components on-demand
+    max_workers=5      # Parallel workers
+)
+
+configs = manager.sample(
+    n_samples=2,
     sampler_type=SamplerType.SOBOL
 )
 
@@ -76,10 +86,17 @@ configs = manager._search_space.sample(
 Converts RAGConfig ↔ Tensor for Bayesian Optimization:
 
 ```python
-# Config → Tensor (for optimizer)
+
+configs = manager.sample(
+    n_samples=2,
+    sampler_type=SamplerType.SOBOL
+)
+config = configs[0]
+
+# Config → Pytorch Tensors (for optimizer)
 tensor = manager.encode_rag_config_to_tensor(config)
 
-# Tensor → Config (decode optimizer output)
+# Tensors → Config (decode optimizer output)
 config = manager.decode_sample_to_rag_config(tensor)
 ```
 
@@ -108,21 +125,29 @@ rag = manager.create_rag_instance(
 The optimizer uses the manager internally:
 
 ```python
-from rag_opt import Optimizer
-
-optimizer = Optimizer(
-    train_dataset=dataset,
-    config_path="./config.yaml"
-)
+from rag_opt.optimizer import Optimizer
 
 my_manager = RAGPipelineManager(
     search_space=search_space,
-    eager_load=False,  # Load components on-demand
-    max_workers=5      # Parallel workers
+    eager_load=False,
+    max_workers=5
 )
-
-optimizer.rag_pipeline_manager = my_manager
-
+optimizer = Optimizer(
+    train_dataset=train_dataset,
+    config_path="rag_config.yaml",
+    verbose=True,
+    custom_rag_pipeline_manager=my_manager
+)
 # Manager is created automatically
 # optimizer.rag_pipeline_manager is ready to use
+```
+
+## Create Custom Manager
+
+```python
+class MyManager(AbstractRAGPipelineManager):
+    """ Create a custom pipeline manager """
+    # NOTE:: u have to create list of abstract methods. For more info see
+    # https://github.com/GaiaAI-Hub/rag-opt/blob/main/src/rag_opt/_manager.py
+
 ```

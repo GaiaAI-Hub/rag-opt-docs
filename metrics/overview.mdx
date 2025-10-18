@@ -22,23 +22,42 @@ RAGOpt provides metrics to evaluate retrieval quality, generation performance, a
 ## Quick Start
 
 ```python
-from rag_opt.eval import ContextPrecision, SafetyMetric
-from rag_opt.evaluator import RAGEvaluator
-from rag_opt.llm import RAGLLM
+from rag_opt.eval.eval import RAGEvaluator
+from rag_opt import init_chat_model
+from rag_opt.dataset import TrainDataset
 
-# Initialize
-llm = RAGLLM(model="gpt-4")
-evaluator = RAGEvaluator(metrics=[
-    ContextPrecision(llm=llm),
-    SafetyMetric(llm=llm)
-])
+# Setup RAG
+llm = init_chat_model(model="gpt-3.5-turbo", model_provider="openai", api_key=OPENAI_API_KEY)
+dataset = TrainDataset.from_json("./rag_dataset.json")
+embeddings = init_embeddings(model="all-MiniLM-L6-v2", model_provider="huggingface",api_key=HUGGINFACE_API_KEY)
+vector_store = init_vectorstore(provider="faiss",embeddings=embeddings,)
+rag = RAGWorkflow(
+    embeddings=embeddings,
+    vector_store=vector_store,
+    llm=llm,
+    retrieval_config={
+        "search_type": "hybrid",
+        "k": 3
+    },
+)
 
-# Evaluate
-results = evaluator.evaluate(dataset)
+# generate evaluation dataset (to be used by evaluator)
+train_dataset = TrainDataset.from_json("./rag_dataset.json")
+eval_dataset = rag.get_batch_answers(train_dataset)
 
-# View results
-for result in results:
-    print(f"{result.name}: {result.value:.3f}")
+
+# Setup evaluator
+evaluator = RAGEvaluator(
+    evaluator_llm=llm,
+    evaluator_embedding=embeddings
+)
+results = evaluator.evaluate(eval_dataset, normalize=True,return_tensor=False))
+
+# Print results
+for metric_name, result in results.items():
+    print(f"{metric_name}: {result.value}")
+
+print(f"\nOverall Score: {evaluator.compute_objective_score(results)}")
 ```
 
 ## How It Works
@@ -67,73 +86,54 @@ Metrics return a `MetricResult` with:
 ## Custom Metrics
 
 ```python
-from rag_opt.eval.metrics.base import BaseMetric, MetricCategory
+class CustomMetric(BaseMetric):
+    is_llm_based: bool = False # Make True if this metric requires llm
+    category: MetricCategory = MetricCategory.GENERATION
+    name: str = "my_custom_metric"
 
-class MyCustomMetric(BaseMetric):
-    name: str = "my_metric"
-    category: MetricCategory = MetricCategory.RETRIEVAL
-    is_llm_based: bool = True
+    def __init__(self):
+        super().__init__(
+            negate=False,  # True if lower is better
+            worst_value=0.0
+        )
+    def _evaluate(self, dataset:EvaluationDataset, **kwargs) -> list[float]:
+        """ Your evaluation logic here"""
+        return [0.85 for _ in dataset.items]
 
-    _prompt_template: str = """
-    Evaluate this context:
-    Context: {context}
-    Question: {question}
-
-    Rate from 0-100.
-    """
-
-    def __init__(self, llm, *args, **kwargs):
-        super().__init__(llm, *args, **kwargs)
-
-    def _evaluate(self, dataset, **kwargs) -> list[float]:
-        prompts = [
-            self._prompt_template.format(
-                context=item.contexts[0],
-                question=item.question
-            )
-            for item in dataset.items
-        ]
-
-        responses = self.llm.batch(prompts)
-
-        return [
-            float(r.content) / 100 if r.content.isdigit() else 0.0
-            for r in responses
-        ]
+evaluator.add_metric(CustomMetric(), weight=0.5)
 ```
 
 ## Advanced Usage
 
-### Custom Prompts
-
-```python
-metric = SafetyMetric(
-    llm=llm,
-    prompt="Rate safety (0-100):\nContext: {contexts}\nQuestion: {question}\nAnswer: {answer}"
-)
-```
-
 ### Selective Evaluation
 
 ```python
+from rag_opt.eval import RAGEvaluator,ContextPrecision, MRR, NDCG,SafetyMetric, AlignmentMetric
+from rag_opt import init_chat_model,init_embeddings
+
+
+llm = init_chat_model(model="gpt-3.5-turbo", model_provider="openai", api_key=OPENAI_API_KEY)
+embeddings = init_embeddings(model="all-MiniLM-L6-v2", model_provider="huggingface",api_key=HUGGINFACE_API_KEY)
+
 # Retrieval only
 retrieval_evaluator = RAGEvaluator(
-    metrics=[ContextPrecision(llm), MRR(), NDCG()]
+    metrics=[ContextPrecision(llm=llm), MRR(embedding_model=embeddings), NDCG(embedding_model=embeddings)]
 )
 
 # Generation only
 generation_evaluator = RAGEvaluator(
     metrics=[SafetyMetric(llm), AlignmentMetric(llm)]
 )
-```
 
-### Analyzing Results
+results = retrieval_evaluator.evaluate(eval_dataset, normalize=True,return_tensor=False)
+results2 = generation_evaluator.evaluate(eval_dataset, normalize=True,return_tensor=False)
 
-```python
-for result in results:
-    print(f"\n{result.name}: {result.value:.3f} ({result.category.value})")
+# Print results
+for metric_name, result in results.items():
+    print(f"{metric_name}: {result.value}")
 
-    if result.metadata and "scores" in result.metadata:
-        scores = result.metadata["scores"]
-        print(f"Range: {min(scores):.3f} - {max(scores):.3f}")
+for metric_name, result in results2.items():
+    print(f"{metric_name}: {result.value}")
+
+print(f"\nOverall Score: {evaluator.compute_objective_score(results)}")
 ```
